@@ -1,0 +1,200 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CampusHub</title><link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%2280%22 font-size=%2280%22>🎓</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f2f4ef;--card:#fff;--tx:#14211d;--mut:#5d6b66;--bd:#dde3dc;--ac:#0f766e;--fs:15px}
+:root[data-t=dark]{--bg:#0b1311;--card:#13201c;--tx:#e6efeb;--mut:#8da39b;--bd:#233630}
+*{box-sizing:border-box}body{margin:0;font:var(--fs) 'Bricolage Grotesque',system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+h2{margin:0 0 14px;font-size:1.6em;font-weight:800}a{color:var(--ac)}
+.shell{display:flex;min-height:100vh}aside{width:220px;background:var(--card);border-right:1px solid var(--bd);padding:14px 10px;position:sticky;top:0;height:100vh;overflow:auto;flex:none}
+aside h1{font-size:1.2em;margin:4px 8px 12px}aside a{display:block;padding:7px 10px;border-radius:8px;color:var(--tx);text-decoration:none;font-size:.93em}
+aside a:hover{background:var(--bg)}aside a.on{background:var(--ac);color:#fff}
+.mn{flex:1;min-width:0}header{display:flex;gap:8px;padding:10px 20px;border-bottom:1px solid var(--bd);background:var(--card);align-items:center;position:sticky;top:0;z-index:5}
+header input{flex:1;max-width:380px}main{padding:20px;max-width:1100px}
+input,select,textarea{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;min-width:0}
+button{font:inherit;background:var(--ac);color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer}button.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}.grid .card{margin:0}
+.m{color:var(--mut);margin:6px 0;font-size:.9em}.tag{background:var(--bg);border:1px solid var(--bd);border-radius:20px;padding:1px 9px;font-size:.78em;margin-left:4px}
+.stat{font-size:2em;font-weight:800}.bar{height:8px;background:var(--bg);border-radius:8px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ac)}
+.ban{background:var(--ac);color:#fff;border-radius:10px;padding:14px;margin-bottom:12px;font-size:1.05em}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:10px 0}.cal b{text-align:center;color:var(--mut)}
+.day{min-height:52px;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:4px 6px;cursor:pointer}.day.sel{border-color:var(--ac)}.day i{float:right;background:var(--ac);color:#fff;border-radius:10px;padding:0 6px;font-size:.75em;font-style:normal}
+#map{height:55vh;border-radius:10px;border:1px solid var(--bd);margin-bottom:10px}#dirs{max-height:240px;overflow:auto}
+.chat{max-height:50vh;overflow:auto}.me{text-align:right;color:var(--ac)}.auth{max-width:380px;margin:8vh auto;padding:0 16px}.auth input,.auth select{width:100%;margin:5px 0}
+.ham{display:none}@media(max-width:760px){aside{position:fixed;z-index:9;left:-240px;transition:left .2s}aside.open{left:0}.ham{display:block}main{padding:12px}header{padding:8px 10px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body><div id=app></div>
+<script>
+const $=s=>document.querySelector(s),v=id=>$('#'+id).value,esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let U=null,POS=null,EV=[],SC=[],D={},F={q:'',cat:'',sort:'date'},cal={y:new Date().getFullYear(),m:new Date().getMonth(),sel:null};
+let P=JSON.parse(localStorage.p||'{"mode":"system","ac":"#0f766e","fs":"15px"}');
+const today=()=>new Date().toISOString().slice(0,10);
+/* ---------- theme (light / dark / system default) ---------- */
+function applyTheme(){const d=P.mode=='dark'||(P.mode=='system'&&matchMedia('(prefers-color-scheme:dark)').matches);const r=document.documentElement;r.dataset.t=d?'dark':'light';r.style.setProperty('--ac',P.ac);r.style.setProperty('--fs',P.fs)}
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme);applyTheme();
+function setP(k,val){P[k]=val;localStorage.p=JSON.stringify(P);applyTheme();if(U){api('me','PUT',{profile:{...U.profile,theme:P}}).then(u=>U=u);add('history',{a:`Theme ${k} → ${val}`})}}
+/* ---------- api helpers ---------- */
+const api=async(p,m='GET',b)=>{const r=await fetch('/api/'+p,{method:m,headers:{'Content-Type':'application/json',Authorization:'Bearer '+(localStorage.tok||'')},body:b?JSON.stringify(b):undefined});
+ if(r.status==401&&!/login|register/.test(p)){logout();throw Error('auth')}const j=await r.json();if(!r.ok)throw Error(j.error||'Error');return j};
+const items=async t=>(await api('items/'+t)).map(i=>{const o={...JSON.parse(i.data),id:i.id,ts:i.ts};D[i.id]=o;return o});
+const add=(t,d)=>api('items/'+t,'POST',d),del=id=>api('items/'+id,'DELETE').then(render);
+const patch=(id,c)=>{const{id:_,ts,...o}=D[id];return api('items/'+id,'PUT',{...o,...c}).then(render)};
+const all=async()=>{const k=['task','reg','exp','ach','notif','goal','post','history'];const r=await Promise.all(k.map(items));return Object.fromEntries(k.map((x,i)=>[x,r[i]]))};
+const km=(a,b,c,d)=>{const r=x=>x*Math.PI/180,h=Math.sin(r(c-a)/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(r(d-b)/2)**2;return 12742*Math.asin(Math.sqrt(h))};
+const dkm=e=>POS?km(POS.lat,POS.lng,e.lat,e.lng):1e9,dist=e=>POS?dkm(e).toFixed(1)+' km':'enable location';
+const kw=()=>((U.profile.skills||'')+','+(U.profile.interests||'')).toLowerCase().split(/[,\s]+/).filter(x=>x.length>2);
+const score=s=>kw().filter(k=>s.toLowerCase().includes(k)).length;
+/* ---------- auth ---------- */
+function showAuth(){$('#app').innerHTML=`<div class=auth><h2>🎓 CampusHub</h2><p class=m>Events, scholarships and your student growth in one place.</p><div class=card>
+<input id=an placeholder="Full name (sign up only)"><input id=ae type=email placeholder="Email"><input id=ap type=password placeholder="Password">
+<select id=ar><option value=student>I'm a student<option value=organizer>I'm an event organizer</select>
+<div class=row><button onclick="auth('login')">Log in</button><button class=g onclick="auth('register')">Sign up</button></div><p class=m id=er style="color:#d33"></p>
+<p class=m>Demo: student@demo.com or organizer@demo.com / demo123</p></div></div>`}
+async function auth(k){try{const r=await api(k,'POST',{name:v('an'),email:v('ae'),password:v('ap'),role:v('ar')});localStorage.tok=r.token;U=r.user;boot()}catch(e){$('#er').textContent=e.message}}
+function logout(){localStorage.removeItem('tok');U=null;showAuth()}
+/* ---------- shell ---------- */
+const NAV=[['dashboard','🏠 Dashboard'],['discover','🔎 Discover'],['radar','📡 EventRadar'],['recs','✨ For you'],['reg','🎟️ Registrations'],['tracker','📍 Event tracker'],['reminders','⏰ Reminders'],['wallet','💰 EventWallet'],['schol','🎓 Scholarships'],['map','🗺️ Map & distance'],['tasks','✅ Tasks'],['calendar','📅 Calendar'],['progress','📈 Progress'],['ach','🏆 Achievements'],['community','💬 Community'],['team','🤝 Teammates'],['assistant','🤖 AI assistant'],['notifs','🔔 Notifications'],['history','🕘 History'],['profile','👤 Profile & theme']];
+async function boot(){applyTheme();if(U.profile.theme){P={...P,...U.profile.theme};localStorage.p=JSON.stringify(P);applyTheme()}
+ const nav=[...NAV];if(U.role=='organizer')nav.splice(1,0,['organizer','📣 Organizer']);
+ $('#app').innerHTML=`<div class=shell><aside id=sb><h1>🎓 CampusHub</h1>${nav.map(n=>`<a href="#/${n[0]}" data-p=${n[0]}>${n[1]}</a>`).join('')}</aside>
+ <div class=mn><header><button class="g ham" onclick="sb.classList.toggle('open')" aria-label=Menu>☰</button><input id=q placeholder="Search events…" onkeydown="if(event.key=='Enter'){F.q=this.value;location.hash='#/discover';render()}">
+ <select id=md onchange="setP('mode',this.value)" aria-label=Theme><option value=system>System<option value=light>Light<option value=dark>Dark</select>
+ <button class=g onclick=logout()>Log out</button></header><main id=main></main></div></div>`;
+ $('#md').value=P.mode;sb.onclick=()=>sb.classList.remove('open');
+ navigator.geolocation?.getCurrentPosition(p=>{POS={lat:p.coords.latitude,lng:p.coords.longitude};render()});
+ await motivate();render()}
+const R={},A={};
+async function render(){const p=(location.hash.slice(2)||'dashboard').split('?')[0];if(!U||!R[p])return;
+ [EV,SC]=await Promise.all([api('events'),api('schol')]);
+ document.querySelectorAll('aside a').forEach(a=>a.classList.toggle('on',a.dataset.p==p));
+ $('#main').innerHTML=await R[p]();A[p]&&A[p]();if(render.last!=p){render.last=p;add('history',{a:'Opened '+p})}}
+addEventListener('hashchange',render);
+/* ---------- motivational notifications ---------- */
+async function motivate(){const d=await all(),n=[],pend=d.task.filter(x=>!x.done).length,last=d.history.find(h=>!/Logged in|Signed up/.test(h.a));
+ const gap=last?Math.floor((Date.now()-new Date(last.ts+'Z'))/864e5):0;
+ if(gap>=2)n.push(`We missed you! ${gap} days since your last activity. Pick one small task today.`);
+ if(pend)n.push(`You have ${pend} pending task(s). Finish one now to keep your streak alive.`);
+ if(!d.ach.length)n.push('No achievements logged yet. Add your first win in Achievements.');
+ for(const t of n){const key=today()+t.slice(0,12);if(!d.notif.some(x=>x.key==key))await add('notif',{text:t,key,read:0,kind:'motivation'})}
+ for(const t of d.task.filter(x=>!x.done&&x.due&&x.due<=new Date(Date.now()+864e5*2).toISOString().slice(0,10))){const key=today()+'due'+t.id;if(!d.notif.some(x=>x.key==key))await add('notif',{text:`Deadline soon: ${t.title} (${t.due})`,key,read:0,kind:'deadline'})}}
+/* ---------- events ---------- */
+const evCard=(e,regs)=>`<div class=card><b>${esc(e.title)}</b><span class=tag>${e.cat}</span>${e.hidden?'<span class=tag>hidden gem</span>':''}<span class=tag>${esc(e.dept)}</span>
+<p class=m>${esc(e.descr)}</p><p class=m>📅 ${e.date}, ${e.etime} · 📍 ${esc(e.venue)} · ${dist(e)} · ₹${e.fee}</p>
+<div class=row><button onclick="regEv(${e.id})" ${regs.includes(e.id)?'disabled':''}>${regs.includes(e.id)?'Registered ✓':'Register'}</button><button class=g onclick="location.hash='#/map?e=${e.id}'">Map</button></div></div>`;
+async function regEv(id){const e=EV.find(x=>x.id==id);await add('reg',{eid:id,title:e.title});if(e.fee)await add('exp',{cat:'Registration',amt:e.fee,note:e.title,title:e.title});
+ await add('notif',{text:`Registered for ${e.title} on ${e.date}`,read:0,kind:'registration'});render()}
+const regIds=async()=>(await items('reg')).map(r=>r.eid);
+function list(f){return async()=>{const regs=await regIds();let l=EV.filter(f).filter(e=>(e.title+e.descr+e.dept+e.venue).toLowerCase().includes(F.q.toLowerCase())&&(!F.cat||e.cat==F.cat));
+ l.sort((a,b)=>F.sort=='distance'?dkm(a)-dkm(b):F.sort=='fee'?a.fee-b.fee:a.date.localeCompare(b.date));
+ return `<h2>${f.h}</h2><div class="row card"><input placeholder="Search" value="${esc(F.q)}" oninput="F.q=this.value" onchange=render()>
+ <select onchange="F.cat=this.value;render()"><option value="">All types${['Hackathon','Workshop','Competition','Club'].map(c=>`<option ${F.cat==c?'selected':''}>${c}`).join('')}</select>
+ <select onchange="F.sort=this.value;render()">${['date','distance','fee'].map(s=>`<option ${F.sort==s?'selected':''} value=${s}>Sort: ${s}`).join('')}</select></div>
+ <div class=grid>${l.map(e=>evCard(e,regs)).join('')||'<p class=m>No events match. Clear filters.</p>'}</div>`}}
+const fd=e=>!e.hidden;fd.h='Hackathons & events';R.discover=list(fd);
+const fr=e=>e.hidden||e.cat=='Club';fr.h='EventRadar: hidden events & club activities';R.radar=list(fr);
+R.recs=async()=>{const regs=await regIds(),sc=e=>score(e.title+e.cat+e.descr+e.dept),s2=s=>score(s.name+s.elig);
+ const ev=[...EV].sort((a,b)=>sc(b)-sc(a)).slice(0,4),sch=[...SC].sort((a,b)=>s2(b)-s2(a)).slice(0,3);
+ return `<h2>Recommended for you</h2><p class=m>Based on your skills & interests: ${esc(kw().join(', ')||'add some in Profile')}</p><div class=grid>${ev.map(e=>evCard(e,regs)).join('')}</div><h3>Scholarships</h3>${sch.map(scCard).join('')}`};
+R.reg=async()=>{const r=await items('reg');return `<h2>My registrations</h2>${r.map(x=>{const e=EV.find(y=>y.id==x.eid);return e?`<div class="card row"><b>${esc(e.title)}</b><span class=m>${e.date}</span><button class=g onclick="del(${x.id})">Cancel</button></div>`:''}).join('')||'<p class=m>Nothing yet. Register from Discover.</p>'}`};
+R.tracker=async()=>{const r=await regIds();const l=EV.filter(e=>r.includes(e.id));return `<h2>Event tracker</h2>${l.map(e=>{const d=Math.ceil((new Date(e.date)-new Date(today()))/864e5);return `<div class=card><b>${esc(e.title)}</b><p class=m>📅 ${e.date} at ${e.etime} · 📍 ${esc(e.venue)} · ${dist(e)}</p><span class=tag>${d<0?'completed':d==0?'today':'in '+d+' days'}</span></div>`}).join('')||'<p class=m>No registered events.</p>'}`};
+R.reminders=async()=>{const[r,t]=await Promise.all([regIds(),items('task')]);const lim=new Date(Date.now()+7*864e5).toISOString().slice(0,10);
+ const l=[...EV.filter(e=>r.includes(e.id)&&e.date>=today()&&e.date<=lim).map(e=>({d:e.date,t:'📅 '+e.title})),...t.filter(x=>!x.done&&x.due&&x.due<=lim).map(x=>({d:x.due,t:'📝 '+x.title})),...SC.filter(s=>s.deadline<=lim&&s.deadline>=today()).map(s=>({d:s.deadline,t:'🎓 '+s.name}))].sort((a,b)=>a.d.localeCompare(b.d));
+ return `<h2>Reminders (next 7 days)</h2><button onclick="Notification.requestPermission().then(p=>{if(p=='granted')new Notification('CampusHub',{body:'${l.length} reminders this week'})})">Enable browser notifications</button><br><br>${l.map(x=>`<div class=card>${x.d} — ${esc(x.t)}</div>`).join('')||'<p class=m>Nothing due this week.</p>'}`};
+/* ---------- wallet ---------- */
+R.wallet=async()=>{const x=await items('exp'),tot=x.reduce((s,e)=>s+ +e.amt,0),by={};x.forEach(e=>by[e.cat]=(by[e.cat]||0)+ +e.amt);
+ return `<h2>EventWallet</h2><div class="card row"><select id=wc>${['Registration','Travel','Food','Stay','Other'].map(c=>`<option>${c}`).join('')}</select><input id=wa type=number placeholder="Amount ₹"><input id=wn placeholder="Note"><button onclick="addExp()">Add expense</button></div>
+ <div class=card><span class=stat>₹${tot}</span> total<br>${Object.entries(by).map(([k,a])=>`<p class=m>${k} ₹${a}</p><div class=bar><i style="width:${100*a/tot}%"></i></div>`).join('')}</div>
+ ${x.map(e=>`<div class="card row"><b>₹${e.amt}</b> ${e.cat} <span class=m>${esc(e.note)}</span><button class=g onclick="del(${e.id})">Delete</button></div>`).join('')}`};
+const addExp=async()=>{if(!v('wa'))return;await add('exp',{cat:v('wc'),amt:+v('wa'),note:v('wn'),title:v('wn')||v('wc')});render()};
+const scCard=s=>`<div class=card><b>${esc(s.name)}</b><p class=m>${esc(s.elig)}</p><p class=m>Deadline ${s.deadline}</p><a href="${s.link}" target=_blank rel=noopener>Apply / details</a></div>`;
+R.schol=async()=>`<h2>Scholarship finder</h2>${SC.map(scCard).join('')}`;
+/* ---------- tasks, calendar, progress ---------- */
+R.tasks=async()=>{const t=await items('task');t.sort((a,b)=>(!!a.done-!!b.done)||(a.due||'9').localeCompare(b.due||'9'));
+ return `<h2>Tasks & deadlines</h2><div class="card row"><input id=tt placeholder="Task"><input id=td type=date><select id=tp><option>High<option selected>Medium<option>Low</select><button onclick="addTask()">Add task</button></div>
+ ${t.map(x=>`<div class="card row"><input type=checkbox ${x.done?'checked':''} onchange="patch(${x.id},{done:this.checked})"><b style="${x.done?'text-decoration:line-through':''}">${esc(x.title)}</b><span class=tag>${x.pri}</span><span class=m>${x.due||''}</span><button class=g onclick="del(${x.id})">Delete</button></div>`).join('')}`};
+const addTask=async()=>{if(!v('tt'))return;await add('task',{title:v('tt'),due:v('td'),pri:v('tp'),done:false});render()};
+R.calendar=async()=>{const[t,r]=await Promise.all([items('task'),regIds()]),evs=EV.filter(e=>r.includes(e.id)),{y,m}=cal,first=new Date(y,m,1).getDay(),n=new Date(y,m+1,0).getDate();
+ const ent=d=>[...evs.filter(e=>e.date==d).map(e=>'📅 '+e.title),...t.filter(x=>x.due==d).map(x=>(x.done?'✅ ':'📝 ')+x.title)];let g='<div></div>'.repeat(first);
+ for(let d=1;d<=n;d++){const s=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,c=ent(s).length;g+=`<div class="day ${cal.sel==s?'sel':''}" onclick="cal.sel='${s}';render()">${d}${c?`<i>${c}</i>`:''}</div>`}
+ const mv=k=>`cal.m+=${k};if(cal.m<0){cal.m=11;cal.y--}if(cal.m>11){cal.m=0;cal.y++}render()`;
+ return `<h2>Calendar & day planner</h2><div class=row><button class=g onclick="${mv(-1)}">‹</button><b>${new Date(y,m).toLocaleString('default',{month:'long',year:'numeric'})}</b><button class=g onclick="${mv(1)}">›</button></div>
+ <div class=cal>${[...'SMTWTFS'].map(x=>`<b>${x}</b>`).join('')}${g}</div>${cal.sel?`<div class=card><b>${cal.sel}</b>${ent(cal.sel).map(x=>`<p>${esc(x)}</p>`).join('')||'<p class=m>Nothing planned.</p>'}</div>`:''}`};
+R.progress=async()=>{const[g,t,a]=await Promise.all([items('goal'),items('task'),items('ach')]),dn=t.filter(x=>x.done).length;
+ return `<h2>Progress tracker</h2><div class=card>Tasks completed: ${dn}/${t.length}<div class=bar><i style="width:${t.length?100*dn/t.length:0}%"></i></div><p class=m>${a.length} achievements logged</p></div>
+ <div class="card row"><input id=gt placeholder="Goal (e.g. Solve 50 problems)"><input id=gg type=number placeholder="Target" style="width:100px"><button onclick="addGoal()">Add goal</button></div>
+ ${g.map(x=>`<div class=card><b>${esc(x.title)}</b> ${x.cur}/${x.target}<div class=bar><i style="width:${Math.min(100,100*x.cur/x.target)}%"></i></div><div class=row><button onclick="patch(${x.id},{cur:${x.cur}+1})">+1</button><button class=g onclick="del(${x.id})">Delete</button></div></div>`).join('')}`};
+const addGoal=async()=>{if(!v('gt')||!v('gg'))return;await add('goal',{title:v('gt'),target:+v('gg'),cur:0});render()};
+/* ---------- achievements, counter, badges ---------- */
+R.ach=async()=>{const d=await all(),a=d.ach,last=a.map(x=>x.date).sort().pop(),days=last?Math.floor((Date.now()-new Date(last))/864e5):null,done=d.task.filter(x=>x.done).length;
+ const B=[['🚀 First step',d.reg.length>=1],['🎟️ Event hopper (3 events)',d.reg.length>=3],['✅ Task master (5 done)',done>=5],['🏆 Achiever',a.length>=1],['🌟 Champion (3 wins)',a.length>=3],['💬 Social',d.post.length>=1],['💰 Budgeter (3 expenses)',d.exp.length>=3],['🎯 Goal setter',d.goal.length>=1]];
+ return `<h2>Achievements & badges</h2><div class=card><span class=stat>${days==null?'—':days}</span> days since your last achievement ${days>=7?'<br><b>Time for a new win!</b>':''}</div>
+ <div class="card row"><input id=at placeholder="Achievement / milestone"><input id=ad type=date value="${today()}"><button onclick="addAch()">Add</button></div>
+ <div class=row>${B.map(b=>`<span class=tag style="padding:6px 12px;opacity:${b[1]?1:.4}">${b[0]}${b[1]?' ✓':''}</span>`).join('')}</div><br>
+ ${a.map(x=>`<div class="card row"><b>${esc(x.title)}</b><span class=m>${x.date}</span><button class=g onclick="del(${x.id})">Delete</button></div>`).join('')}`};
+const addAch=async()=>{if(!v('at'))return;await add('ach',{title:v('at'),date:v('ad')});render()};
+/* ---------- community & teammates ---------- */
+R.community=async()=>{const p=await api('community');return `<h2>Campus community</h2><div class="card row"><input id=cp style="flex:1" placeholder="Share something with campus…"><button onclick="post()">Post</button></div>
+ ${p.map(x=>`<div class=card><b>${esc(x.name)}</b> <span class=m>${x.ts}</span><p>${esc(JSON.parse(x.data).text)}</p>${x.uid==U.id?`<button class=g onclick="del(${x.id})">Delete</button>`:''}</div>`).join('')}`};
+const post=async()=>{if(!v('cp'))return;await add('post',{text:v('cp')});render()};
+R.team=async()=>{const u=await api('teammates'),mine=kw();
+ const l=u.map(x=>{const p=JSON.parse(x.profile),t=((p.skills||'')+','+(p.interests||'')).toLowerCase(),sh=mine.filter(k=>t.includes(k));return{...x,p,sh}}).sort((a,b)=>b.sh.length-a.sh.length);
+ return `<h2>Teammate finder</h2>${l.map(x=>`<div class=card><b>${esc(x.name)}</b> <span class=m>${esc(x.p.course||'')} ${x.p.year?'· year '+esc(x.p.year):''}</span><p class=m>Skills: ${esc(x.p.skills||'—')}<br>Interests: ${esc(x.p.interests||'—')}</p>${x.sh.length?`<span class=tag>${x.sh.length} in common: ${esc(x.sh.join(', '))}</span>`:''}</div>`).join('')||'<p class=m>No other students yet.</p>'}`};
+/* ---------- assistant ---------- */
+let chat=[];R.assistant=async()=>`<h2>AI campus assistant</h2><div class="card chat" id=ch>${chat.map(m=>`<p class="${m[0]}">${m[1]}</p>`).join('')||'<p class=m>Ask about events, scholarships, tasks, budget or how to prepare.</p>'}</div><div class=row><input id=aq style="flex:1" placeholder="e.g. nearest hackathon?" onkeydown="if(event.key=='Enter')ask()"><button onclick=ask()>Ask</button></div>`;
+async function ask(){const q=v('aq').toLowerCase();if(!q)return;const d=await all();let a;
+ if(/hack|event|workshop/.test(q))a='Upcoming picks: '+[...EV].filter(e=>e.date>=today()).sort((x,y)=>(POS?dkm(x)-dkm(y):0)||x.date.localeCompare(y.date)).slice(0,3).map(e=>`${esc(e.title)} (${e.date}, ${dist(e)})`).join('; ');
+ else if(/schol/.test(q))a='Closest deadlines: '+SC.slice(0,3).map(s=>`${esc(s.name)} (${s.deadline})`).join('; ');
+ else if(/task|todo|pending|today/.test(q))a=d.task.filter(x=>!x.done).slice(0,5).map(x=>`${esc(x.title)} ${x.due||''}`).join('; ')||'No pending tasks. 🎉';
+ else if(/budget|spent|expense|money/.test(q))a='You have spent ₹'+d.exp.reduce((s,e)=>s+ +e.amt,0)+' across '+d.exp.length+' expenses.';
+ else if(/prepare|tip|study/.test(q))a='Checklist: 1) read the rules & theme, 2) form a team of 2–4 with complementary skills, 3) plan travel & budget in EventWallet, 4) prepare a 3-minute pitch, 5) sleep well.';
+ else a='I can help with events, scholarships, tasks, budget and preparation tips.';
+ chat.push(['me',esc(q)],['bot',a]);add('history',{a:'Asked assistant: '+q});render()}
+/* ---------- notifications, history, profile, organizer ---------- */
+R.notifs=async()=>{const n=await items('notif');return `<h2>Notification center</h2><button class=g onclick="Promise.all(${JSON.stringify(n.filter(x=>!x.read).map(x=>x.id))}.map(i=>patch(i,{read:1})))">Mark all read</button><br><br>${n.map(x=>`<div class="card row" style="${x.read?'opacity:.6':''}"><span class=tag>${x.kind}</span><span style="flex:1">${esc(x.text)}</span><span class=m>${x.ts}</span><button class=g onclick="del(${x.id})">×</button></div>`).join('')||'<p class=m>All caught up.</p>'}`};
+R.history=async()=>{const h=await items('history');return `<h2>Activity history</h2><button class=g onclick="api('history','DELETE').then(render)">Clear history</button><br><br>${h.map(x=>`<div class="card row"><span style="flex:1">${esc(x.a)}</span><span class=m>${x.ts} UTC</span></div>`).join('')}`};
+R.profile=async()=>{const p=U.profile;return `<h2>Profile & appearance</h2><div class=card><h3>Appearance</h3><div class=row>
+ <label>Mode <select onchange="setP('mode',this.value);$('#md').value=this.value">${['system','light','dark'].map(m=>`<option ${P.mode==m?'selected':''}>${m}`).join('')}</select></label>
+ <label>Accent <input type=color value="${P.ac}" onchange="setP('ac',this.value)"></label>
+ <label>Text size <select onchange="setP('fs',this.value)">${['13px','15px','17px','19px'].map(m=>`<option ${P.fs==m?'selected':''}>${m}`).join('')}</select></label></div></div>
+ <div class=card><h3>About you</h3><div class=row><input id=pn value="${esc(U.name)}" placeholder=Name><input id=pc value="${esc(p.course)}" placeholder="Course"><input id=py value="${esc(p.year)}" placeholder="Year" style="width:80px"></div><br>
+ <input id=ps value="${esc(p.skills)}" placeholder="Skills (comma separated)" style="width:100%"><br><br><input id=pi value="${esc(p.interests)}" placeholder="Interests" style="width:100%"><br><br><button onclick="saveProfile()">Save profile</button></div>`};
+const saveProfile=async()=>{U=await api('me','PUT',{name:v('pn'),profile:{...U.profile,course:v('pc'),year:v('py'),skills:v('ps'),interests:v('pi')}});add('history',{a:'Updated profile'});render()};
+R.organizer=async()=>{const mine=EV.filter(e=>e.uid==U.id);return `<h2>Organizer dashboard</h2><div class=card><div class=row><input id=ot placeholder=Title><select id=oc><option>Hackathon<option>Workshop<option>Competition<option>Club</select><input id=od placeholder=Department><input id=odt type=date><input id=ov placeholder=Venue></div><br>
+ <div class=row><input id=ola placeholder=Latitude><input id=oln placeholder=Longitude><button class=g onclick="if(POS){ola.value=POS.lat;oln.value=POS.lng}">Use my location</button><input id=of type=number placeholder="Fee ₹"><label><input type=checkbox id=oh> hidden / club event</label></div><br>
+ <textarea id=ox placeholder=Description style="width:100%"></textarea><br><br><button onclick="pubEv()">Publish event</button></div>
+ ${mine.map(e=>`<div class="card row"><b>${esc(e.title)}</b><span class=m>${e.date} · ${e.regs} registrations</span><button class=g onclick="api('events/${e.id}','DELETE').then(render)">Delete</button></div>`).join('')}`};
+const pubEv=async()=>{try{await api('events','POST',{title:v('ot'),cat:v('oc'),dept:v('od'),date:v('odt'),venue:v('ov'),lat:v('ola'),lng:v('oln'),fee:v('of'),hidden:$('#oh').checked,descr:v('ox')});render()}catch(e){alert(e.message)}};
+/* ---------- Google Maps ---------- */
+let mp,map,dr,ds,tr,ts,bk;
+const loadMaps=()=>mp||(mp=new Promise(async(ok,no)=>{const k=(await api('config')).mapsKey;if(!k)return no();window._ok=ok;const s=document.createElement('script');s.src=`https://maps.googleapis.com/maps/api/js?key=${k}&libraries=places,geometry&callback=_ok`;s.onerror=no;document.head.append(s)}));
+R.map=async()=>{const l=[...EV].sort((a,b)=>dkm(a)-dkm(b));return `<h2>Map & distance</h2><div class="card row"><select id=tm><option value=DRIVING>🚗 Driving<option value=WALKING>🚶 Walking<option value=TRANSIT>🚌 Transit<option value=BICYCLING>🚲 Cycling</select>
+ <select onchange="map&&map.setMapTypeId(this.value)"><option value=roadmap>Map<option value=satellite>Satellite<option value=hybrid>Hybrid<option value=terrain>Terrain</select>
+ <label><input type=checkbox onchange="tr&&tr.setMap(this.checked?map:null)"> Traffic</label><label><input type=checkbox onchange="ts&&ts.setMap(this.checked?map:null)"> Transit</label><label><input type=checkbox onchange="bk&&bk.setMap(this.checked?map:null)"> Bike lanes</label>
+ <button class=g onclick="map&&map.getStreetView().setVisible(true)">Street View</button><button class=g onclick="POS&&map&&(map.panTo(POS),map.setZoom(13))">My location</button><input id=pl placeholder="Search a place"></div>
+ <div id=map></div><p id=rs style="font-weight:600"></p><div id=dirs></div>
+ ${l.map(e=>`<div class="card row"><b>${esc(e.title)}</b><span class=m>${dist(e)} away (straight line)</span><button class=g onclick="route(${e.id})">Directions</button></div>`).join('')}`};
+A.map=async()=>{try{await loadMaps()}catch{$('#map').innerHTML='<p class=m style="padding:20px">Map needs a Google Maps key: put GOOGLE_MAPS_KEY in .env and restart. Distances below already work with your GPS.</p>';return}
+ map=new google.maps.Map($('#map'),{center:POS||{lat:28.6139,lng:77.209},zoom:11,mapTypeControl:true,streetViewControl:true,fullscreenControl:true,zoomControl:true,scaleControl:true,rotateControl:true});
+ tr=new google.maps.TrafficLayer();ts=new google.maps.TransitLayer();bk=new google.maps.BicyclingLayer();
+ if(POS)new google.maps.Marker({position:POS,map,title:'You are here',icon:'https://maps.google.com/mapfiles/ms/icons/blue-dot.png'});
+ const iw=new google.maps.InfoWindow();EV.forEach(e=>{const m=new google.maps.Marker({position:{lat:e.lat,lng:e.lng},map,title:e.title});
+  m.addListener('click',()=>{iw.setContent(`<b>${esc(e.title)}</b><br>${esc(e.venue)}<br>${dist(e)} away<br><a href=# onclick="route(${e.id});return false">Directions</a>`);iw.open(map,m)})});
+ dr=new google.maps.DirectionsRenderer({map,panel:$('#dirs')});ds=new google.maps.DirectionsService();
+ const ac=new google.maps.places.Autocomplete($('#pl'));ac.addListener('place_changed',()=>{const p=ac.getPlace();if(p.geometry){map.panTo(p.geometry.location);map.setZoom(15)}});
+ const q=new URLSearchParams(location.hash.split('?')[1]).get('e');if(q)route(+q)};
+function route(id){const e=EV.find(x=>x.id==id);if(!map)return alert('Map is not available (add GOOGLE_MAPS_KEY).');if(!POS)return alert('Allow location access to get directions.');
+ ds.route({origin:POS,destination:{lat:e.lat,lng:e.lng},travelMode:v('tm')},(r,s)=>{if(s!='OK')return $('#rs').textContent='Route error: '+s;dr.setDirections(r);const l=r.routes[0].legs[0];$('#rs').textContent=`${e.title}: ${l.distance.text}, ${l.duration.text}`;add('history',{a:'Route to '+e.title})})}
+/* ---------- dashboard ---------- */
+R.dashboard=async()=>{const d=await all(),r=d.reg.map(x=>x.eid),pend=d.task.filter(x=>!x.done),pct=d.task.length?Math.round(100*(d.task.length-pend.length)/d.task.length):0,unread=d.notif.filter(x=>!x.read),
+ up=[...pend.filter(x=>x.due).map(x=>({d:x.due,t:'📝 '+x.title})),...EV.filter(e=>r.includes(e.id)).map(e=>({d:e.date,t:'📅 '+e.title})),...SC.map(s=>({d:s.deadline,t:'🎓 '+s.name}))].filter(x=>x.d>=today()).sort((a,b)=>a.d.localeCompare(b.d)).slice(0,6),
+ la=d.ach.map(x=>x.date).sort().pop(),days=la?Math.floor((Date.now()-new Date(la))/864e5):null,mot=unread.find(x=>x.kind=='motivation');
+ return `<h2>Hi ${esc(U.name.split(' ')[0])} 👋</h2>${mot?`<div class=ban>${esc(mot.text)}</div>`:''}
+ <div class=grid><div class=card><span class=stat>${pend.length}</span><p class=m>pending tasks</p></div><div class=card><span class=stat>${r.length}</span><p class=m>registered events</p></div>
+ <div class=card><span class=stat>${d.ach.length}</span><p class=m>achievements · ${days==null?'none yet':days+' days since last'}</p></div><div class=card><span class=stat>${unread.length}</span><p class=m>unread notifications</p></div></div><br>
+ <div class=card>Overall progress ${pct}%<div class=bar><i style="width:${pct}%"></i></div></div>
+ <div class=card><b>Upcoming deadlines</b>${up.map(x=>`<p class=m>${x.d} — ${esc(x.t)}</p>`).join('')||'<p class=m>Nothing upcoming.</p>'}</div>`};
+/* ---------- start ---------- */
+(async()=>{if(localStorage.tok){try{U=await api('me');boot();return}catch{}}showAuth()})();
+</script></body></html>
