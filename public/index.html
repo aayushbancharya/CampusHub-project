@@ -28,7 +28,7 @@ button{font:inherit;background:var(--ac);color:#fff;border:0;border-radius:8px;p
 </style></head><body><div id=app></div>
 <script>
 const $=s=>document.querySelector(s),v=id=>$('#'+id).value,esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let U=null,POS=null,EV=[],SC=[],D={},F={q:'',cat:'',sort:'date'},cal={y:new Date().getFullYear(),m:new Date().getMonth(),sel:null};
+let U=null,POS=null,EV=[],D={},F={q:'',cat:'',sort:'date'},cal={y:new Date().getFullYear(),m:new Date().getMonth(),sel:null};
 let P=JSON.parse(localStorage.p||'{"mode":"system","ac":"#0f766e","fs":"15px"}');
 const today=()=>new Date().toISOString().slice(0,10);
 /* ---------- theme (light / dark / system default) ---------- */
@@ -41,7 +41,7 @@ const api=async(p,m='GET',b)=>{const r=await fetch('/api/'+p,{method:m,headers:{
 const items=async t=>(await api('items/'+t)).map(i=>{const o={...JSON.parse(i.data),id:i.id,ts:i.ts};D[i.id]=o;return o});
 const add=(t,d)=>api('items/'+t,'POST',d),del=id=>api('items/'+id,'DELETE').then(render);
 const patch=(id,c)=>{const{id:_,ts,...o}=D[id];return api('items/'+id,'PUT',{...o,...c}).then(render)};
-const all=async()=>{const k=['task','reg','exp','ach','notif','goal','post','history'];const r=await Promise.all(k.map(items));return Object.fromEntries(k.map((x,i)=>[x,r[i]]))};
+const all=async()=>{const k=['task','reg','ach','notif','goal','post','history'];const r=await Promise.all(k.map(items));return Object.fromEntries(k.map((x,i)=>[x,r[i]]))};
 const km=(a,b,c,d)=>{const r=x=>x*Math.PI/180,h=Math.sin(r(c-a)/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(r(d-b)/2)**2;return 12742*Math.asin(Math.sqrt(h))};
 const dkm=e=>POS?km(POS.lat,POS.lng,e.lat,e.lng):1e9,dist=e=>POS?dkm(e).toFixed(1)+' km':'enable location';
 const kw=()=>((U.profile.skills||'')+','+(U.profile.interests||'')).toLowerCase().split(/[,\s]+/).filter(x=>x.length>2);
@@ -55,7 +55,7 @@ function showAuth(){$('#app').innerHTML=`<div class=auth><h2>🎓 CampusHub</h2>
 async function auth(k){try{const r=await api(k,'POST',{name:v('an'),email:v('ae'),password:v('ap'),role:v('ar')});localStorage.tok=r.token;U=r.user;boot()}catch(e){$('#er').textContent=e.message}}
 function logout(){localStorage.removeItem('tok');U=null;showAuth()}
 /* ---------- shell ---------- */
-const NAV=[['dashboard','🏠 Dashboard'],['discover','🔎 Discover'],['radar','📡 EventRadar'],['recs','✨ For you'],['reg','🎟️ Registrations'],['tracker','📍 Event tracker'],['reminders','⏰ Reminders'],['wallet','💰 EventWallet'],['schol','🎓 Scholarships'],['map','🗺️ Map & distance'],['tasks','✅ Tasks'],['calendar','📅 Calendar'],['progress','📈 Progress'],['ach','🏆 Achievements'],['community','💬 Community'],['team','🤝 Teammates'],['assistant','🤖 AI assistant'],['notifs','🔔 Notifications'],['history','🕘 History'],['profile','👤 Profile & theme']];
+const NAV=[['dashboard','🏠 Dashboard'],['discover','🔎 Discover'],['radar','📡 EventRadar'],['recs','✨ For you'],['reg','🎟️ Registrations'],['tracker','📍 Event tracker'],['reminders','⏰ Reminders'],['map','🗺️ Map & distance'],['tasks','✅ Tasks'],['calendar','📅 Calendar'],['progress','📈 Progress'],['ach','🏆 Achievements'],['community','💬 Community'],['team','🤝 Teammates'],['assistant','🤖 AI assistant'],['notifs','🔔 Notifications'],['history','🕘 History'],['profile','👤 Profile & theme']];
 async function boot(){applyTheme();if(U.profile.theme){P={...P,...U.profile.theme};localStorage.p=JSON.stringify(P);applyTheme()}
  const nav=[...NAV];if(U.role=='organizer')nav.splice(1,0,['organizer','📣 Organizer']);
  $('#app').innerHTML=`<div class=shell><aside id=sb><h1>🎓 CampusHub</h1>${nav.map(n=>`<a href="#/${n[0]}" data-p=${n[0]}>${n[1]}</a>`).join('')}</aside>
@@ -67,7 +67,7 @@ async function boot(){applyTheme();if(U.profile.theme){P={...P,...U.profile.them
  await motivate();render()}
 const R={},A={};
 async function render(){const p=(location.hash.slice(2)||'dashboard').split('?')[0];if(!U||!R[p])return;
- [EV,SC]=await Promise.all([api('events'),api('schol')]);
+ EV=await api('events');
  document.querySelectorAll('aside a').forEach(a=>a.classList.toggle('on',a.dataset.p==p));
  $('#main').innerHTML=await R[p]();A[p]&&A[p]();if(render.last!=p){render.last=p;add('history',{a:'Opened '+p})}}
 addEventListener('hashchange',render);
@@ -83,7 +83,7 @@ async function motivate(){const d=await all(),n=[],pend=d.task.filter(x=>!x.done
 const evCard=(e,regs)=>`<div class=card><b>${esc(e.title)}</b><span class=tag>${e.cat}</span>${e.hidden?'<span class=tag>hidden gem</span>':''}<span class=tag>${esc(e.dept)}</span>
 <p class=m>${esc(e.descr)}</p><p class=m>📅 ${e.date}, ${e.etime} · 📍 ${esc(e.venue)} · ${dist(e)} · ₹${e.fee}</p>
 <div class=row><button onclick="regEv(${e.id})" ${regs.includes(e.id)?'disabled':''}>${regs.includes(e.id)?'Registered ✓':'Register'}</button><button class=g onclick="location.hash='#/map?e=${e.id}'">Map</button></div></div>`;
-async function regEv(id){const e=EV.find(x=>x.id==id);await add('reg',{eid:id,title:e.title});if(e.fee)await add('exp',{cat:'Registration',amt:e.fee,note:e.title,title:e.title});
+async function regEv(id){const e=EV.find(x=>x.id==id);await add('reg',{eid:id,title:e.title});
  await add('notif',{text:`Registered for ${e.title} on ${e.date}`,read:0,kind:'registration'});render()}
 const regIds=async()=>(await items('reg')).map(r=>r.eid);
 function list(f){return async()=>{const regs=await regIds();let l=EV.filter(f).filter(e=>(e.title+e.descr+e.dept+e.venue).toLowerCase().includes(F.q.toLowerCase())&&(!F.cat||e.cat==F.cat));
@@ -94,22 +94,14 @@ function list(f){return async()=>{const regs=await regIds();let l=EV.filter(f).f
  <div class=grid>${l.map(e=>evCard(e,regs)).join('')||'<p class=m>No events match. Clear filters.</p>'}</div>`}}
 const fd=e=>!e.hidden;fd.h='Hackathons & events';R.discover=list(fd);
 const fr=e=>e.hidden||e.cat=='Club';fr.h='EventRadar: hidden events & club activities';R.radar=list(fr);
-R.recs=async()=>{const regs=await regIds(),sc=e=>score(e.title+e.cat+e.descr+e.dept),s2=s=>score(s.name+s.elig);
- const ev=[...EV].sort((a,b)=>sc(b)-sc(a)).slice(0,4),sch=[...SC].sort((a,b)=>s2(b)-s2(a)).slice(0,3);
- return `<h2>Recommended for you</h2><p class=m>Based on your skills & interests: ${esc(kw().join(', ')||'add some in Profile')}</p><div class=grid>${ev.map(e=>evCard(e,regs)).join('')}</div><h3>Scholarships</h3>${sch.map(scCard).join('')}`};
+R.recs=async()=>{const regs=await regIds(),sc=e=>score(e.title+e.cat+e.descr+e.dept);
+ const ev=[...EV].sort((a,b)=>sc(b)-sc(a)).slice(0,4);
+ return `<h2>Recommended for you</h2><p class=m>Based on your skills & interests: ${esc(kw().join(', ')||'add some in Profile')}</p><div class=grid>${ev.map(e=>evCard(e,regs)).join('')}</div>`};
 R.reg=async()=>{const r=await items('reg');return `<h2>My registrations</h2>${r.map(x=>{const e=EV.find(y=>y.id==x.eid);return e?`<div class="card row"><b>${esc(e.title)}</b><span class=m>${e.date}</span><button class=g onclick="del(${x.id})">Cancel</button></div>`:''}).join('')||'<p class=m>Nothing yet. Register from Discover.</p>'}`};
 R.tracker=async()=>{const r=await regIds();const l=EV.filter(e=>r.includes(e.id));return `<h2>Event tracker</h2>${l.map(e=>{const d=Math.ceil((new Date(e.date)-new Date(today()))/864e5);return `<div class=card><b>${esc(e.title)}</b><p class=m>📅 ${e.date} at ${e.etime} · 📍 ${esc(e.venue)} · ${dist(e)}</p><span class=tag>${d<0?'completed':d==0?'today':'in '+d+' days'}</span></div>`}).join('')||'<p class=m>No registered events.</p>'}`};
 R.reminders=async()=>{const[r,t]=await Promise.all([regIds(),items('task')]);const lim=new Date(Date.now()+7*864e5).toISOString().slice(0,10);
- const l=[...EV.filter(e=>r.includes(e.id)&&e.date>=today()&&e.date<=lim).map(e=>({d:e.date,t:'📅 '+e.title})),...t.filter(x=>!x.done&&x.due&&x.due<=lim).map(x=>({d:x.due,t:'📝 '+x.title})),...SC.filter(s=>s.deadline<=lim&&s.deadline>=today()).map(s=>({d:s.deadline,t:'🎓 '+s.name}))].sort((a,b)=>a.d.localeCompare(b.d));
+ const l=[...EV.filter(e=>r.includes(e.id)&&e.date>=today()&&e.date<=lim).map(e=>({d:e.date,t:'📅 '+e.title})),...t.filter(x=>!x.done&&x.due&&x.due<=lim).map(x=>({d:x.due,t:'📝 '+x.title})),].sort((a,b)=>a.d.localeCompare(b.d));
  return `<h2>Reminders (next 7 days)</h2><button onclick="Notification.requestPermission().then(p=>{if(p=='granted')new Notification('CampusHub',{body:'${l.length} reminders this week'})})">Enable browser notifications</button><br><br>${l.map(x=>`<div class=card>${x.d} — ${esc(x.t)}</div>`).join('')||'<p class=m>Nothing due this week.</p>'}`};
-/* ---------- wallet ---------- */
-R.wallet=async()=>{const x=await items('exp'),tot=x.reduce((s,e)=>s+ +e.amt,0),by={};x.forEach(e=>by[e.cat]=(by[e.cat]||0)+ +e.amt);
- return `<h2>EventWallet</h2><div class="card row"><select id=wc>${['Registration','Travel','Food','Stay','Other'].map(c=>`<option>${c}`).join('')}</select><input id=wa type=number placeholder="Amount ₹"><input id=wn placeholder="Note"><button onclick="addExp()">Add expense</button></div>
- <div class=card><span class=stat>₹${tot}</span> total<br>${Object.entries(by).map(([k,a])=>`<p class=m>${k} ₹${a}</p><div class=bar><i style="width:${100*a/tot}%"></i></div>`).join('')}</div>
- ${x.map(e=>`<div class="card row"><b>₹${e.amt}</b> ${e.cat} <span class=m>${esc(e.note)}</span><button class=g onclick="del(${e.id})">Delete</button></div>`).join('')}`};
-const addExp=async()=>{if(!v('wa'))return;await add('exp',{cat:v('wc'),amt:+v('wa'),note:v('wn'),title:v('wn')||v('wc')});render()};
-const scCard=s=>`<div class=card><b>${esc(s.name)}</b><p class=m>${esc(s.elig)}</p><p class=m>Deadline ${s.deadline}</p><a href="${s.link}" target=_blank rel=noopener>Apply / details</a></div>`;
-R.schol=async()=>`<h2>Scholarship finder</h2>${SC.map(scCard).join('')}`;
 /* ---------- tasks, calendar, progress ---------- */
 R.tasks=async()=>{const t=await items('task');t.sort((a,b)=>(!!a.done-!!b.done)||(a.due||'9').localeCompare(b.due||'9'));
  return `<h2>Tasks & deadlines</h2><div class="card row"><input id=tt placeholder="Task"><input id=td type=date><select id=tp><option>High<option selected>Medium<option>Low</select><button onclick="addTask()">Add task</button></div>
@@ -128,7 +120,7 @@ R.progress=async()=>{const[g,t,a]=await Promise.all([items('goal'),items('task')
 const addGoal=async()=>{if(!v('gt')||!v('gg'))return;await add('goal',{title:v('gt'),target:+v('gg'),cur:0});render()};
 /* ---------- achievements, counter, badges ---------- */
 R.ach=async()=>{const d=await all(),a=d.ach,last=a.map(x=>x.date).sort().pop(),days=last?Math.floor((Date.now()-new Date(last))/864e5):null,done=d.task.filter(x=>x.done).length;
- const B=[['🚀 First step',d.reg.length>=1],['🎟️ Event hopper (3 events)',d.reg.length>=3],['✅ Task master (5 done)',done>=5],['🏆 Achiever',a.length>=1],['🌟 Champion (3 wins)',a.length>=3],['💬 Social',d.post.length>=1],['💰 Budgeter (3 expenses)',d.exp.length>=3],['🎯 Goal setter',d.goal.length>=1]];
+ const B=[['🚀 First step',d.reg.length>=1],['🎟️ Event hopper (3 events)',d.reg.length>=3],['✅ Task master (5 done)',done>=5],['🏆 Achiever',a.length>=1],['🌟 Champion (3 wins)',a.length>=3],['💬 Social',d.post.length>=1],['🎯 Goal setter',d.goal.length>=1]];
  return `<h2>Achievements & badges</h2><div class=card><span class=stat>${days==null?'—':days}</span> days since your last achievement ${days>=7?'<br><b>Time for a new win!</b>':''}</div>
  <div class="card row"><input id=at placeholder="Achievement / milestone"><input id=ad type=date value="${today()}"><button onclick="addAch()">Add</button></div>
  <div class=row>${B.map(b=>`<span class=tag style="padding:6px 12px;opacity:${b[1]?1:.4}">${b[0]}${b[1]?' ✓':''}</span>`).join('')}</div><br>
@@ -145,9 +137,7 @@ R.team=async()=>{const u=await api('teammates'),mine=kw();
 let chat=[];R.assistant=async()=>`<h2>AI campus assistant</h2><div class="card chat" id=ch>${chat.map(m=>`<p class="${m[0]}">${m[1]}</p>`).join('')||'<p class=m>Ask about events, scholarships, tasks, budget or how to prepare.</p>'}</div><div class=row><input id=aq style="flex:1" placeholder="e.g. nearest hackathon?" onkeydown="if(event.key=='Enter')ask()"><button onclick=ask()>Ask</button></div>`;
 async function ask(){const q=v('aq').toLowerCase();if(!q)return;const d=await all();let a;
  if(/hack|event|workshop/.test(q))a='Upcoming picks: '+[...EV].filter(e=>e.date>=today()).sort((x,y)=>(POS?dkm(x)-dkm(y):0)||x.date.localeCompare(y.date)).slice(0,3).map(e=>`${esc(e.title)} (${e.date}, ${dist(e)})`).join('; ');
- else if(/schol/.test(q))a='Closest deadlines: '+SC.slice(0,3).map(s=>`${esc(s.name)} (${s.deadline})`).join('; ');
  else if(/task|todo|pending|today/.test(q))a=d.task.filter(x=>!x.done).slice(0,5).map(x=>`${esc(x.title)} ${x.due||''}`).join('; ')||'No pending tasks. 🎉';
- else if(/budget|spent|expense|money/.test(q))a='You have spent ₹'+d.exp.reduce((s,e)=>s+ +e.amt,0)+' across '+d.exp.length+' expenses.';
  else if(/prepare|tip|study/.test(q))a='Checklist: 1) read the rules & theme, 2) form a team of 2–4 with complementary skills, 3) plan travel & budget in EventWallet, 4) prepare a 3-minute pitch, 5) sleep well.';
  else a='I can help with events, scholarships, tasks, budget and preparation tips.';
  chat.push(['me',esc(q)],['bot',a]);add('history',{a:'Asked assistant: '+q});render()}
@@ -188,7 +178,7 @@ function route(id){const e=EV.find(x=>x.id==id);if(!map)return alert('Map is not
  ds.route({origin:POS,destination:{lat:e.lat,lng:e.lng},travelMode:v('tm')},(r,s)=>{if(s!='OK')return $('#rs').textContent='Route error: '+s;dr.setDirections(r);const l=r.routes[0].legs[0];$('#rs').textContent=`${e.title}: ${l.distance.text}, ${l.duration.text}`;add('history',{a:'Route to '+e.title})})}
 /* ---------- dashboard ---------- */
 R.dashboard=async()=>{const d=await all(),r=d.reg.map(x=>x.eid),pend=d.task.filter(x=>!x.done),pct=d.task.length?Math.round(100*(d.task.length-pend.length)/d.task.length):0,unread=d.notif.filter(x=>!x.read),
- up=[...pend.filter(x=>x.due).map(x=>({d:x.due,t:'📝 '+x.title})),...EV.filter(e=>r.includes(e.id)).map(e=>({d:e.date,t:'📅 '+e.title})),...SC.map(s=>({d:s.deadline,t:'🎓 '+s.name}))].filter(x=>x.d>=today()).sort((a,b)=>a.d.localeCompare(b.d)).slice(0,6),
+ up=[...pend.filter(x=>x.due).map(x=>({d:x.due,t:'📝 '+x.title})),...EV.filter(e=>r.includes(e.id)).map(e=>({d:e.date,t:'📅 '+e.title}))].filter(x=>x.d>=today()).sort((a,b)=>a.d.localeCompare(b.d)).slice(0,6),
  la=d.ach.map(x=>x.date).sort().pop(),days=la?Math.floor((Date.now()-new Date(la))/864e5):null,mot=unread.find(x=>x.kind=='motivation');
  return `<h2>Hi ${esc(U.name.split(' ')[0])} 👋</h2>${mot?`<div class=ban>${esc(mot.text)}</div>`:''}
  <div class=grid><div class=card><span class=stat>${pend.length}</span><p class=m>pending tasks</p></div><div class=card><span class=stat>${r.length}</span><p class=m>registered events</p></div>

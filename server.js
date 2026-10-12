@@ -1,11 +1,11 @@
 require('dotenv').config();
 const express=require('express'),Db=require('better-sqlite3'),bc=require('bcryptjs'),jwt=require('jsonwebtoken');
 const db=new Db(process.env.DB_PATH||'campus.db'),S=process.env.JWT_SECRET||'change-me';
-const TYPES=['task','reg','exp','ach','notif','goal','post','history'];
+const TYPES=['task','reg','ach','notif','goal','post','history'];
 db.exec(`create table if not exists users(id integer primary key,name,email unique,pass,role default 'student',profile default '{}');
 create table if not exists items(id integer primary key,uid int,type,data,ts default current_timestamp);
 create table if not exists events(id integer primary key,title,cat,hidden int,dept,date,etime default '10:00 AM',venue,lat real,lng real,fee real,descr,link,uid int);
-create table if not exists schol(id integer primary key,name,elig,deadline,link);`);
+`);
 const day=n=>new Date(Date.now()+n*864e5).toISOString().slice(0,10);
 if(!db.prepare('select count(*) c from events').get().c){
  const e=db.prepare('insert into events(title,cat,hidden,dept,date,venue,lat,lng,fee,descr,link) values(?,?,?,?,?,?,?,?,?,?,?)');
@@ -18,12 +18,6 @@ if(!db.prepare('select count(*) c from events').get().c){
   ['Cybersecurity CTF','Competition',0,'CSE',15,'NSUT Dwarka',28.609,77.0378,150,'Capture-the-flag with web, crypto and forensics.','#'],
   ['Photography Walk','Club',1,'Arts',2,'India Gate Lawns',28.6129,77.2295,0,'Casual club walk, all skill levels welcome.','#']
  ].forEach(r=>{r[4]=day(r[4]);e.run(...r)});
- const s=db.prepare('insert into schol values(null,?,?,?,?)');
- [['National Scholarship Portal (Central Sector)','Class 12 above 80th percentile; family income < 4.5L',20,'https://scholarships.gov.in'],
-  ['Reliance Foundation UG Scholarship','First-year UG, merit + need based',25,'https://www.reliancefoundation.org'],
-  ['Google Generation Scholarship','CS students, underrepresented groups',40,'https://buildyourfuture.withgoogle.com/scholarships'],
-  ['HDFC Badhte Kadam','Students facing financial crisis',14,'https://www.hdfcbank.com/personal/borrow/popular-loans/educational-loan'],
-  ['Aditya Birla Scholarship','Top institutes, merit based',33,'https://www.adityabirlascholars.net']].forEach(r=>{r[2]=day(r[2]);s.run(...r)});
  const u=db.prepare('insert into users(name,email,pass,role,profile) values(?,?,?,?,?)'),h=bc.hashSync('demo123',10);
  u.run('Demo Student','student@demo.com',h,'student',JSON.stringify({course:'B.Tech CSE',year:'2',skills:'python, web, ai',interests:'hackathon, robotics, startup'}));
  u.run('Demo Organizer','organizer@demo.com',h,'organizer','{}');
@@ -55,7 +49,6 @@ app.post('/api/events',(q,s)=>{const u=db.prepare('select role from users where 
   .run(b.title,b.cat,b.hidden?1:0,b.dept,b.date,b.etime||'10:00 AM',b.venue,+b.lat,+b.lng,+b.fee||0,b.descr,b.link||'#',q.uid);
  log(q.uid,'Published event: '+b.title);s.json({ok:1})});
 app.delete('/api/events/:id',(q,s)=>{db.prepare('delete from events where id=? and uid=?').run(q.params.id,q.uid);log(q.uid,'Deleted an event');s.json({ok:1})});
-app.get('/api/schol',(q,s)=>s.json(db.prepare('select * from schol order by deadline').all()));
 app.get('/api/community',(q,s)=>s.json(db.prepare("select i.id,i.uid,i.data,i.ts,u.name from items i join users u on u.id=i.uid where type='post' order by i.id desc limit 100").all()));
 app.get('/api/teammates',(q,s)=>s.json(db.prepare('select id,name,profile from users where id!=?').all(q.uid)));
 app.delete('/api/history',(q,s)=>{db.prepare("delete from items where uid=? and type='history'").run(q.uid);s.json({ok:1})});
